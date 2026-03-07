@@ -15,10 +15,10 @@ When using Claude Code (or similar tools) over SSH, you can't paste images from 
 ```bash
 # macOS (requires Homebrew)
 brew install pngpaste
-curl -fsSL https://raw.githubusercontent.com/yourusername/clipssh/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/samuellawrentz/clipssh/main/install.sh | bash
 
 # Or clone and install
-git clone https://github.com/yourusername/clipssh.git
+git clone https://github.com/samuellawrentz/clipssh.git
 cd clipssh
 ./install.sh
 ```

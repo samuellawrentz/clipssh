@@ -6,7 +6,7 @@
 set -e
 
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
-REPO_URL="https://raw.githubusercontent.com/yourusername/clipssh/main/clipssh"
+REPO_URL="https://raw.githubusercontent.com/samuellawrentz/clipssh/main/clipssh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

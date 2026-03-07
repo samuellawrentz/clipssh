@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # clipssh - Send clipboard screenshot to remote SSH host
-# https://github.com/yourusername/clipssh
+# https://github.com/samuellawrentz/clipssh
 #
 
 set -e
