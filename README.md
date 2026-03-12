@@ -26,13 +26,13 @@ cd clipssh
 ## Usage
 
 ```bash
-# Take a screenshot to clipboard
+# 1. Take a screenshot to the clipboard
 # macOS: Cmd+Shift+Ctrl+4 (select area, copies to clipboard)
 
-# Upload to remote host
+# 2. Run the clipssh command to move the clipboard file to the SSH machine
 clipssh user@myserver
 
-# Paste the path into Claude Code on the remote
+# 3. Cmd/Ctrl + V in SSH Machine
 # The image will auto-attach
 ```
 
