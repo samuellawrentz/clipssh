@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>clipssh — Clipboard to SSH in one command</title>
+  <meta name="description" content="Send clipboard screenshots to remote SSH hosts. Perfect for pasting images into Claude Code over SSH.">
+  <meta property="og:title" content="clipssh — Clipboard to SSH in one command">
+  <meta property="og:description" content="Send screenshots from your local clipboard to any remote host over SSH.">
+  <meta property="og:image" content="https://clipssh.samuellawrentz.com/assets/og-image.png">
+  <meta property="og:url" content="https://clipssh.samuellawrentz.com">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    :root {
+      --bg: #0a0a0b;
+      --surface: #111113;
+      --border: #1e1e22;
+      --text: #e8e6e3;
+      --text-dim: #6b6a68;
+      --accent: #b4f77e;
+      --accent-dim: #3d5a2a;
+      --glow: rgba(180, 247, 126, 0.15);
+      --mono: 'JetBrains Mono', monospace;
+      --serif: 'Instrument Serif', Georgia, serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 15px;
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Noise texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Scanline effect */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.08) 2px,
+        rgba(0,0,0,0.08) 4px
+      );
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ─── NAV ─── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10,10,11,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.5px;
+      color: var(--accent);
+    }
+
+    .nav-links { display: flex; gap: 28px; font-size: 13px; }
+    .nav-links a { color: var(--text-dim); transition: color 0.2s; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    .gh-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text);
+      transition: all 0.2s;
+    }
+    .gh-btn:hover {
+      border-color: var(--accent);
+      text-decoration: none;
+      background: var(--glow);
+    }
+    .gh-btn svg { width: 16px; height: 16px; }
+
+    /* ─── HERO ─── */
+    .hero {
+      padding: 160px 0 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 120%;
+      max-width: 1400px;
+      opacity: 0.07;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .hero .container { position: relative; z-index: 1; }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 14px;
+      border: 1px solid var(--accent-dim);
+      border-radius: 100px;
+      font-size: 12px;
+      color: var(--accent);
+      margin-bottom: 28px;
+      background: rgba(180, 247, 126, 0.05);
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .hero h1 {
+      font-family: var(--serif);
+      font-size: clamp(48px, 7vw, 80px);
+      font-weight: 400;
+      line-height: 1;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 em {
+      font-style: italic;
+      color: var(--accent);
+      text-shadow: 0 0 60px var(--glow);
+    }
+
+    .hero-sub {
+      font-size: 16px;
+      color: var(--text-dim);
+      max-width: 400px;
+      line-height: 1.7;
+      margin-bottom: 36px;
+    }
+
+    .hero-install {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      max-width: 480px;
+    }
+
+    .hero-install code {
+      flex: 1;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow-x: auto;
+    }
+
+    .hero-install button {
+      padding: 14px 20px;
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      color: var(--bg);
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .hero-install button:hover {
+      background: #c8ff9a;
+      box-shadow: 0 0 30px var(--glow);
+    }
+
+    .hero-install button.copied {
+      background: var(--surface);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* ─── TERMINAL DEMO ─── */
+    .terminal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.03),
+        0 20px 60px rgba(0,0,0,0.5),
+        0 0 120px -40px var(--glow);
+    }
+
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+    .terminal-dot:nth-child(1) { background: #ff5f57; }
+    .terminal-dot:nth-child(2) { background: #ffbd2e; }
+    .terminal-dot:nth-child(3) { background: #28ca41; }
+
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .terminal-body {
+      padding: 24px;
+      font-size: 13px;
+      line-height: 2;
+      min-height: 280px;
+    }
+
+    .terminal-body .prompt { color: var(--accent); }
+    .terminal-body .comment { color: var(--text-dim); font-style: italic; }
+    .terminal-body .cmd { color: var(--text); }
+    .terminal-body .output { color: #28ca41; }
+    .terminal-body .dim { color: var(--text-dim); }
+
+    .term-line {
+      opacity: 0;
+      transform: translateY(4px);
+      animation: termReveal 0.3s forwards;
+    }
+
+    @keyframes termReveal {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background: var(--accent);
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    /* ─── FLOW SECTION ─── */
+    .flow {
+      padding: 100px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-family: var(--serif);
+      font-size: clamp(32px, 4vw, 48px);
+      font-weight: 400;
+      letter-spacing: -1px;
+      margin-bottom: 64px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+    }
+
+    .step {
+      padding: 36px 28px;
+      background: var(--surface);
+      position: relative;
+      transition: all 0.3s;
+    }
+
+    .step:first-child { border-radius: 12px 0 0 12px; }
+    .step:last-child { border-radius: 0 12px 12px 0; }
+
+    .step:hover {
+      background: #161618;
+      z-index: 1;
+    }
+
+    .step-num {
+      font-size: 48px;
+      font-weight: 800;
+      color: var(--accent-dim);
+      line-height: 1;
+      margin-bottom: 20px;
+      transition: color 0.3s;
+    }
+
+    .step:hover .step-num { color: var(--accent); }
+
+    .step h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .step p {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .step kbd {
+      display: inline-block;
+      padding: 2px 7px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    /* ─── FEATURES ─── */
+    .features {
+      padding: 100px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+
+    .feature {
+      padding: 40px 32px;
+      background: var(--surface);
+      transition: all 0.3s;
+    }
+
+    .feature:first-child { border-radius: 12px 0 0 0; }
+    .feature:nth-child(3) { border-radius: 0 12px 0 0; }
+    .feature:nth-child(4) { border-radius: 0 0 0 12px; }
+    .feature:last-child { border-radius: 0 0 12px 0; }
+
+    .feature:hover { background: #161618; }
+
+    .feature-icon {
+      font-size: 28px;
+      margin-bottom: 20px;
+      display: block;
+    }
+
+    .feature h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .feature p {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* ─── PLATFORMS ─── */
+    .platforms {
+      padding: 100px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .platform-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+
+    .platform {
+      padding: 40px 36px;
+      background: var(--surface);
+      transition: all 0.3s;
+    }
+
+    .platform:first-child { border-radius: 12px 0 0 12px; }
+    .platform:last-child { border-radius: 0 12px 12px 0; }
+
+    .platform:hover { background: #161618; }
+
+    .platform h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .platform h3 span { font-size: 24px; }
+
+    .platform .req {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    .platform code {
+      display: block;
+      padding: 12px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--accent);
+    }
+
+    /* ─── CTA ─── */
+    .cta {
+      padding: 120px 0;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      position: relative;
+    }
+
+    .cta::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 300px;
+      height: 200px;
+      background: radial-gradient(ellipse, var(--glow), transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta h2 {
+      font-family: var(--serif);
+      font-size: clamp(36px, 5vw, 56px);
+      font-weight: 400;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+    }
+
+    .cta p {
+      color: var(--text-dim);
+      margin-bottom: 40px;
+      font-size: 15px;
+    }
+
+    .cta-install {
+      display: inline-block;
+      padding: 16px 32px;
+      background: var(--accent);
+      color: var(--bg);
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 14px;
+      border-radius: 8px;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .cta-install:hover {
+      background: #c8ff9a;
+      box-shadow: 0 0 40px var(--glow);
+      text-decoration: none;
+      color: var(--bg);
+    }
+
+    /* ─── FOOTER ─── */
+    footer {
+      padding: 32px 0;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 768px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .step:first-child { border-radius: 12px 0 0 0; }
+      .step:nth-child(2) { border-radius: 0 12px 0 0; }
+      .step:nth-child(3) { border-radius: 0 0 0 12px; }
+      .step:last-child { border-radius: 0 0 12px 0; }
+      .features-grid { grid-template-columns: 1fr; }
+      .feature { border-radius: 0 !important; }
+      .feature:first-child { border-radius: 12px 12px 0 0 !important; }
+      .feature:last-child { border-radius: 0 0 12px 12px !important; }
+      .platform-grid { grid-template-columns: 1fr; }
+      .platform { border-radius: 0 !important; }
+      .platform:first-child { border-radius: 12px 12px 0 0 !important; }
+      .platform:last-child { border-radius: 0 0 12px 12px !important; }
+      nav { padding: 12px 16px; }
+      .nav-links { display: none; }
+    }
+
+    @media (max-width: 480px) {
+      .steps { grid-template-columns: 1fr; }
+      .step { border-radius: 0 !important; }
+      .step:first-child { border-radius: 12px 12px 0 0 !important; }
+      .step:last-child { border-radius: 0 0 12px 12px !important; }
+      .hero-install { flex-direction: column; }
+      .hero-install code { border-radius: 8px 8px 0 0; border-right: 1px solid var(--border); border-bottom: none; }
+      .hero-install button { border-radius: 0 0 8px 8px; }
+    }
+
+    /* ─── SCROLL ANIMATIONS ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-logo">clipssh</div>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#platforms">Platforms</a>
+    </div>
+    <a href="https://github.com/samuellawrentz/clipssh" class="gh-btn" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <img src="assets/hero-illustration.png" alt="" class="hero-bg" aria-hidden="true">
+    <div class="container">
+      <div class="hero-grid">
+        <div>
+          <div class="hero-badge">v1.0 &mdash; Open Source</div>
+          <h1>Clipboard<br>to <em>SSH</em></h1>
+          <p class="hero-sub">
+            Send screenshots from your local clipboard to any remote host.
+            Paste images into Claude Code, Vim, or any terminal tool over SSH.
+          </p>
+          <div class="hero-install">
+            <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/samuellawrentz/clipssh/main/install.sh | bash</code>
+            <button onclick="copyInstall()" id="copy-btn">Copy</button>
+          </div>
+        </div>
+
+        <!-- Terminal Demo -->
+        <div class="terminal">
+          <div class="terminal-bar">
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <div class="terminal-title">Terminal</div>
+            <div></div>
+          </div>
+          <div class="terminal-body" id="terminal-demo">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="flow" id="how-it-works">
+    <div class="container">
+      <div class="section-label reveal">Process</div>
+      <h2 class="section-title reveal">Four steps, one command</h2>
+      <div class="flow-diagram reveal" style="margin-bottom:48px">
+        <img src="assets/flow-diagram.png" alt="clipssh flow: screenshot, extract, upload via SSH, paste path" style="width:100%;border-radius:12px;border:1px solid var(--border)">
+      </div>
+      <div class="steps">
+        <div class="step reveal">
+          <div class="step-num">01</div>
+          <h3>Screenshot</h3>
+          <p>Take a screenshot to your clipboard.<br><kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>4</kbd></p>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">02</div>
+          <h3>Extract</h3>
+          <p>clipssh grabs the PNG image from your local clipboard automatically.</p>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">03</div>
+          <h3>Upload</h3>
+          <p>Streams the image to your remote host over SSH. No extra services needed.</p>
+        </div>
+        <div class="step reveal">
+          <div class="step-num">04</div>
+          <h3>Paste</h3>
+          <p>The remote path is copied to clipboard. <kbd>Cmd</kbd>+<kbd>V</kbd> to attach it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="container">
+      <div class="section-label reveal">Features</div>
+      <h2 class="section-title reveal">Built for developers</h2>
+      <div class="features-grid">
+        <div class="feature reveal">
+          <span class="feature-icon" aria-hidden="true">&rsaquo;_</span>
+          <h3>Zero config</h3>
+          <p>No daemons, no servers, no port forwarding. Just SSH and a clipboard tool.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-icon" aria-hidden="true">&lt;/&gt;</span>
+          <h3>Claude Code ready</h3>
+          <p>Purpose-built for pasting images into AI coding tools running on remote machines.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-icon" aria-hidden="true">~/.env</span>
+          <h3>Default host</h3>
+          <p>Set CLIPSSH_HOST once and skip the argument every time. One less thing to type.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-icon" aria-hidden="true">&#47;tmp</span>
+          <h3>Timestamped files</h3>
+          <p>Each upload gets a unique path. No collisions, no overwrites, easy cleanup.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-icon" aria-hidden="true">&amp;&amp;</span>
+          <h3>Cross-platform</h3>
+          <p>macOS with pngpaste, Linux with xclip or wl-clipboard. Both just work.</p>
+        </div>
+        <div class="feature reveal">
+          <span class="feature-icon" aria-hidden="true">MIT</span>
+          <h3>Open source</h3>
+          <p>~130 lines of bash. Read the whole thing in two minutes. Fork it, ship it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLATFORMS -->
+  <section class="platforms" id="platforms">
+    <div class="container">
+      <div class="section-label reveal">Platforms</div>
+      <h2 class="section-title reveal">Works where you work</h2>
+      <div class="platform-grid">
+        <div class="platform reveal">
+          <h3><span>&#63743;</span> macOS</h3>
+          <p class="req">Requires pngpaste for clipboard access</p>
+          <code>brew install pngpaste</code>
+        </div>
+        <div class="platform reveal">
+          <h3><span>&#128039;</span> Linux</h3>
+          <p class="req">X11 or Wayland clipboard support</p>
+          <code>apt install xclip  # or wl-clipboard</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <div class="container">
+      <h2 class="reveal">Start pasting</h2>
+      <p class="reveal">Install in 10 seconds. Works immediately.</p>
+      <button class="cta-install reveal" onclick="copyInstall()">
+        curl -fsSL ...install.sh | bash
+      </button>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container" style="display:flex;justify-content:space-between;width:100%">
+      <span>clipssh &mdash; MIT License</span>
+      <a href="https://github.com/samuellawrentz/clipssh" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </footer>
+
+  <script>
+    // Copy install command
+    function copyInstall() {
+      const cmd = 'curl -fsSL https://raw.githubusercontent.com/samuellawrentz/clipssh/main/install.sh | bash';
+      navigator.clipboard.writeText(cmd).then(() => {
+        const btn = document.getElementById('copy-btn');
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Terminal animation
+    const lines = [
+      { type: 'comment', text: '# Take a screenshot (Cmd+Shift+Ctrl+4)' },
+      { type: 'blank' },
+      { type: 'prompt', text: '$ clipssh user@devbox' },
+      { type: 'blank' },
+      { type: 'output', text: '\u2713 Uploaded: /tmp/clipboard-1711500042.png' },
+      { type: 'dim', text: 'Path copied to clipboard - paste it directly' },
+      { type: 'blank' },
+      { type: 'comment', text: '# Now Cmd+V in Claude Code on the remote host' },
+      { type: 'prompt', text: '$ ', cursor: true },
+    ];
+
+    function renderTerminal() {
+      const el = document.getElementById('terminal-demo');
+      el.innerHTML = '';
+      lines.forEach((line, i) => {
+        const div = document.createElement('div');
+        div.className = 'term-line';
+        div.style.animationDelay = `${i * 0.25 + 0.5}s`;
+
+        if (line.type === 'blank') {
+          div.innerHTML = '&nbsp;';
+        } else if (line.type === 'prompt') {
+          div.innerHTML = `<span class="prompt">${line.text.substring(0, 2)}</span><span class="cmd">${line.text.substring(2)}</span>${line.cursor ? '<span class="cursor"></span>' : ''}`;
+        } else {
+          div.className += ` ${line.type}`;
+          div.textContent = line.text;
+        }
+
+        el.appendChild(div);
+      });
+    }
+
+    renderTerminal();
+
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+
+</body>
+</html>
