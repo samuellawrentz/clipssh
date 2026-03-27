@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>clipssh — Clipboard to SSH in one command</title>
-  <meta name="description" content="Send clipboard screenshots to remote SSH hosts. Perfect for pasting images into Claude Code over SSH.">
+  <meta name="description" content="Send clipboard screenshots to remote SSH hosts. Perfect for pasting images into Claude Code, OpenCode over SSH.">
   <meta property="og:title" content="clipssh — Clipboard to SSH in one command">
   <meta property="og:description" content="Send screenshots from your local clipboard to any remote host over SSH.">
   <meta property="og:image" content="https://clipssh.samuellawrentz.com/assets/og-image.png">
@@ -625,7 +625,7 @@
           <h1>Clipboard<br>to <em>SSH</em></h1>
           <p class="hero-sub">
             Send screenshots from your local clipboard to any remote host.
-            Paste images into Claude Code, Vim, or any terminal tool over SSH.
+            Paste images into Claude Code, OpenCode, Vim, or any terminal tool over SSH.
           </p>
           <div class="hero-install">
             <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/samuellawrentz/clipssh/main/install.sh | bash</code>
@@ -695,7 +695,7 @@
         </div>
         <div class="feature reveal">
           <span class="feature-icon" aria-hidden="true">&lt;/&gt;</span>
-          <h3>Claude Code ready</h3>
+          <h3>Claude Code &amp; OpenCode ready</h3>
           <p>Purpose-built for pasting images into AI coding tools running on remote machines.</p>
         </div>
         <div class="feature reveal">
@@ -785,7 +785,7 @@
       { type: 'output', text: '\u2713 Uploaded: /tmp/clipboard-1711500042.png' },
       { type: 'dim', text: 'Path copied to clipboard - paste it directly' },
       { type: 'blank' },
-      { type: 'comment', text: '# Now Cmd+V in Claude Code on the remote host' },
+      { type: 'comment', text: '# Now Cmd+V in Claude Code or OpenCode on the remote host' },
       { type: 'prompt', text: '$ ', cursor: true },
     ];
 
