@@ -13,13 +13,25 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
+ALIAS_DIR="$HOME/.clipssh"
+ALIAS_FILE="$ALIAS_DIR/aliases"
+
 usage() {
-    echo "Usage: clipssh [user@host] [options]"
+    echo "Usage: clipssh [user@host|alias] [options]"
+    echo "       clipssh alias add <name> <user@host>"
+    echo "       clipssh alias remove <name>"
+    echo "       clipssh alias list"
     echo ""
     echo "Send clipboard screenshot to remote SSH host and copy path to clipboard."
     echo ""
     echo "Arguments:"
     echo "  user@host    Remote host (default: \$CLIPSSH_HOST)"
+    echo "  alias        Saved alias name (resolved from ~/.clipssh/aliases)"
+    echo ""
+    echo "Subcommands:"
+    echo "  alias add <name> <user@host>  Save a host under a short name"
+    echo "  alias remove <name>           Delete a saved alias"
+    echo "  alias list                    Show all saved aliases"
     echo ""
     echo "Options:"
     echo "  -h, --help     Show this help"
@@ -29,6 +41,8 @@ usage() {
     echo "  CLIPSSH_HOST   Default remote host"
     echo ""
     echo "Example:"
+    echo "  clipssh alias add myserver user@myserver.com"
+    echo "  clipssh myserver"
     echo "  clipssh user@myserver"
     echo "  CLIPSSH_HOST=user@server clipssh"
 }
@@ -41,6 +55,71 @@ error() {
 success() {
     echo -e "${GREEN}$1${NC}"
 }
+
+ensure_alias_file() {
+    mkdir -p "$ALIAS_DIR"
+    [[ -f "$ALIAS_FILE" ]] || touch "$ALIAS_FILE"
+}
+
+alias_add() {
+    local name="$1"
+    local target="$2"
+    [[ -z "$name" || -z "$target" ]] && error "Usage: clipssh alias add <name> <user@host>"
+    [[ "$name" == *"="* || "$name" == *" "* ]] && error "Invalid alias name: $name"
+    [[ "$target" != *"@"* ]] && error "Target must be in user@host form: $target"
+    ensure_alias_file
+    local tmp
+    tmp=$(mktemp)
+    grep -v "^${name}=" "$ALIAS_FILE" > "$tmp" 2>/dev/null || true
+    mv "$tmp" "$ALIAS_FILE"
+    echo "${name}=${target}" >> "$ALIAS_FILE"
+    success "Saved alias: ${name} -> ${target}"
+}
+
+alias_remove() {
+    local name="$1"
+    [[ -z "$name" ]] && error "Usage: clipssh alias remove <name>"
+    ensure_alias_file
+    if ! grep -q "^${name}=" "$ALIAS_FILE" 2>/dev/null; then
+        error "Alias not found: $name"
+    fi
+    local tmp
+    tmp=$(mktemp)
+    grep -v "^${name}=" "$ALIAS_FILE" > "$tmp" || true
+    mv "$tmp" "$ALIAS_FILE"
+    success "Removed alias: $name"
+}
+
+alias_list() {
+    ensure_alias_file
+    if [[ ! -s "$ALIAS_FILE" ]]; then
+        echo "No aliases saved. Add one with: clipssh alias add <name> <user@host>"
+        return
+    fi
+    cat "$ALIAS_FILE"
+}
+
+resolve_alias() {
+    local name="$1"
+    [[ -f "$ALIAS_FILE" ]] || error "Alias not found: $name"
+    local match
+    match=$(grep "^${name}=" "$ALIAS_FILE" | head -n1 || true)
+    [[ -z "$match" ]] && error "Alias not found: $name"
+    echo "${match#*=}"
+}
+
+# Handle alias subcommand
+if [[ "$1" == "alias" ]]; then
+    shift
+    sub="${1:-}"
+    case "$sub" in
+        add)    shift; alias_add "$@"; exit 0 ;;
+        remove) shift; alias_remove "$@"; exit 0 ;;
+        list)   alias_list; exit 0 ;;
+        "")     error "Usage: clipssh alias <add|remove|list> ..." ;;
+        *)      error "Unknown alias subcommand: $sub" ;;
+    esac
+fi
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -67,6 +146,11 @@ done
 HOST="${HOST:-$CLIPSSH_HOST}"
 if [[ -z "$HOST" ]]; then
     error "No host specified. Use: clipssh user@host or set CLIPSSH_HOST"
+fi
+
+# Resolve alias if HOST is a bare name (no user@)
+if [[ "$HOST" != *"@"* ]]; then
+    HOST=$(resolve_alias "$HOST")
 fi
 
 # Check OS and clipboard tool
