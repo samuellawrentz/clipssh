@@ -36,6 +36,26 @@ clipssh user@myserver
 # The image will auto-attach
 ```
 
+## Aliases
+
+Save hosts under short names so you don't have to type `user@host` every time.
+
+```bash
+# Save an alias
+clipssh alias add myserver user@myserver.com
+
+# List saved aliases
+clipssh alias list
+
+# Remove an alias
+clipssh alias remove myserver
+
+# Use an alias directly
+clipssh myserver
+```
+
+Aliases are stored in `~/.clipssh/aliases`, one `name=user@host` per line.
+
 ## Set Default Host
 
 ```bash
@@ -45,6 +65,8 @@ export CLIPSSH_HOST=user@myserver
 # Now just run:
 clipssh
 ```
+
+`CLIPSSH_HOST` also accepts an alias name.
 
 ## Requirements
 
