@@ -38,7 +38,8 @@ usage() {
     echo "  -v, --version  Show version"
     echo ""
     echo "Environment:"
-    echo "  CLIPSSH_HOST   Default remote host"
+    echo "  CLIPSSH_HOST         Default remote host"
+    echo "  CLIPSSH_REMOTE_DIR   Remote directory for uploads (default: /tmp)"
     echo ""
     echo "Example:"
     echo "  clipssh alias add myserver user@myserver.com"
@@ -192,10 +193,12 @@ if [[ ! -s "$TEMP_FILE" ]]; then
 fi
 
 # Generate remote path
-REMOTE_PATH="/tmp/clipboard-$(date +%s).png"
+REMOTE_DIR="${CLIPSSH_REMOTE_DIR:-/tmp}"
+REMOTE_PATH="$REMOTE_DIR/clipboard-$(date +%s).png"
 
-# Upload via SSH
-if ! cat "$TEMP_FILE" | ssh "$HOST" "cat > $REMOTE_PATH" 2>/dev/null; then
+# Upload via SSH. umask 077 keeps the remote file at mode 0600 so screenshots
+# aren't world-readable on multi-user hosts (default /tmp is shared).
+if ! cat "$TEMP_FILE" | ssh "$HOST" "umask 077 && cat > $REMOTE_PATH" 2>/dev/null; then
     error "Failed to upload to $HOST"
 fi
 
