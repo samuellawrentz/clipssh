@@ -1,14 +1,14 @@
 # clipssh
 
-Send clipboard screenshots to remote SSH hosts. Perfect for pasting images into AI coding tools like Claude Code or OpenCode running over SSH.
+Send clipboard screenshots to remote SSH hosts or save locally. Perfect for pasting images into AI coding tools like Claude Code, OpenCode, or local LLMs.
 
 ## The Problem
 
-When using Claude Code, OpenCode (or similar tools) over SSH, you can't paste images from your local clipboard. The remote terminal has no access to your local display server.
+When using Claude Code, OpenCode (or similar tools) over SSH or in local CLI environments, you need a quick way to reference clipboard images as file paths. Over SSH, the remote terminal has no access to your local display server; locally, taking a screenshot and finding its path is tedious.
 
 ## The Solution
 
-`clipssh` extracts the screenshot from your local clipboard, uploads it to the remote server, and copies the file path to your clipboard. Just paste the path into Claude Code, OpenCode, or any terminal tool and it auto-attaches the image.
+`clipssh` extracts the screenshot from your local clipboard, saves it locally or uploads it to a remote server, and copies the file path to your clipboard. Just paste the path into Claude Code, OpenCode, local LLMs, or any terminal tool and it auto-attaches the image.
 
 ## Install
 
@@ -25,6 +25,8 @@ cd clipssh
 
 ## Usage
 
+### Remote SSH Host
+
 ```bash
 # 1. Take a screenshot to the clipboard
 # macOS: Cmd+Shift+Ctrl+4 (select area, copies to clipboard)
@@ -34,6 +36,20 @@ clipssh user@myserver
 
 # 3. Cmd/Ctrl + V in SSH Machine
 # The image will auto-attach
+```
+
+### Local Mode (No SSH)
+
+Save clipboard screenshots directly to your local `/tmp` directory and copy the local file path to your clipboard (ideal for pasting into local LLMs):
+
+```bash
+# Save locally using the -l or --local flag
+clipssh -l
+# or
+clipssh --local
+
+# Or run bare clipssh when CLIPSSH_HOST is not set
+clipssh
 ```
 
 ## Custom SSH Port
@@ -103,32 +119,38 @@ clipssh
 
 `CLIPSSH_HOST` also accepts an alias name.
 
-## Change Upload Directory
+## Change Directory
 
-Uploads land in `/tmp` by default. Override with `CLIPSSH_REMOTE_DIR`:
+For remote uploads, files land in `/tmp` by default. Override with `CLIPSSH_REMOTE_DIR`:
 
 ```bash
 export CLIPSSH_REMOTE_DIR=~/.cache/clipssh   # must already exist on the remote
 ```
 
-Files are written with `umask 077` so they're created as `0600` (owner-readable only) — important on shared hosts where `/tmp` is world-readable by default.
+For local saves, files land in `/tmp` by default. Override with `CLIPSSH_LOCAL_DIR`:
+
+```bash
+export CLIPSSH_LOCAL_DIR=~/.local/state/clipssh
+```
+
+Files are written with `umask 077` so they're created as `0600` (owner-readable only) — important on shared hosts or systems where `/tmp` is world-readable by default.
 
 ## Requirements
 
 **macOS:**
 - `pngpaste` - Install with `brew install pngpaste`
-- SSH access to remote host
+- SSH access to remote host (for remote mode)
 
 **Linux:**
 - `xclip` (X11) or `wl-clipboard` (Wayland)
-- SSH access to remote host
+- SSH access to remote host (for remote mode)
 
 ## How It Works
 
 1. Extracts PNG image from your local clipboard
-2. Uploads to `$CLIPSSH_REMOTE_DIR/clipboard-<timestamp>.png` (default `/tmp`) on remote host via SSH, with `umask 077` so the file is `0600`
-3. Copies the remote path to your clipboard
-4. You paste the path into Claude Code, OpenCode, or any tool, which reads and displays the image
+2. Saves to `$CLIPSSH_LOCAL_DIR/clipboard-<timestamp>.png` (default `/tmp`) locally or uploads to `$CLIPSSH_REMOTE_DIR/clipboard-<timestamp>.png` on the remote host via SSH, with `umask 077` so the file is `0600`
+3. Copies the resulting file path to your clipboard
+4. You paste the path into Claude Code, OpenCode, local LLMs, or any tool, which reads and displays the image
 
 ## License
 

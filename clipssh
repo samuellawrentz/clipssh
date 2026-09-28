@@ -22,7 +22,7 @@ usage() {
     echo "       clipssh alias remove <name>"
     echo "       clipssh alias list"
     echo ""
-    echo "Send clipboard screenshot to remote SSH host and copy path to clipboard."
+    echo "Send clipboard screenshot to remote SSH host (or save locally) and copy path to clipboard."
     echo ""
     echo "Arguments:"
     echo "  user@host    Remote host (default: \$CLIPSSH_HOST)"
@@ -35,14 +35,17 @@ usage() {
     echo "  alias list                    Show all saved aliases"
     echo ""
     echo "Options:"
+    echo "  -l, --local    Save screenshot locally without SSH"
     echo "  -h, --help     Show this help"
     echo "  -v, --version  Show version"
     echo ""
     echo "Environment:"
     echo "  CLIPSSH_HOST         Default remote host"
     echo "  CLIPSSH_REMOTE_DIR   Remote directory for uploads (default: /tmp)"
+    echo "  CLIPSSH_LOCAL_DIR    Local directory for saved screenshots (default: /tmp)"
     echo ""
     echo "Example:"
+    echo "  clipssh -l"
     echo "  clipssh alias add myserver user@myserver.com"
     echo "  clipssh myserver"
     echo "  clipssh user@myserver"
@@ -129,6 +132,19 @@ if [[ "$1" == "alias" ]]; then
     esac
 fi
 
+copy_path_to_clipboard() {
+    local target_path="$1"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo -n "$target_path" | pbcopy
+    elif [[ -n "$WAYLAND_DISPLAY" ]] && command -v wl-copy &> /dev/null; then
+        echo -n "$target_path" | wl-copy
+    elif command -v xclip &> /dev/null; then
+        echo -n "$target_path" | xclip -selection clipboard
+    fi
+}
+
+LOCAL_MODE=false
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -140,6 +156,10 @@ while [[ $# -gt 0 ]]; do
             echo "clipssh $VERSION"
             exit 0
             ;;
+        -l|--local)
+            LOCAL_MODE=true
+            shift
+            ;;
         -*)
             error "Unknown option: $1"
             ;;
@@ -150,22 +170,26 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Determine host
-HOST="${HOST:-$CLIPSSH_HOST}"
-if [[ -z "$HOST" ]]; then
-    error "No host specified. Use: clipssh user@host or set CLIPSSH_HOST"
+# Determine host or default to local mode
+if [[ "$LOCAL_MODE" != true ]]; then
+    HOST="${HOST:-$CLIPSSH_HOST}"
+    if [[ -z "$HOST" ]]; then
+        LOCAL_MODE=true
+    fi
 fi
 
-# Resolve alias if HOST is a bare name (no user@)
-if [[ "$HOST" != *"@"* ]]; then
-    HOST=$(resolve_alias "$HOST")
-fi
+if [[ "$LOCAL_MODE" != true ]]; then
+    # Resolve alias if HOST is a bare name (no user@)
+    if [[ "$HOST" != *"@"* ]]; then
+        HOST=$(resolve_alias "$HOST")
+    fi
 
-# Extract port if specified in user@host:port format
-SSH_PORT=""
-if [[ "$HOST" =~ ^(.*):([0-9]+)$ && "${BASH_REMATCH[1]}" != *:* ]]; then
-    HOST="${BASH_REMATCH[1]}"
-    SSH_PORT="${BASH_REMATCH[2]}"
+    # Extract port if specified in user@host:port format
+    SSH_PORT=""
+    if [[ "$HOST" =~ ^(.*):([0-9]+)$ && "${BASH_REMATCH[1]}" != *:* ]]; then
+        HOST="${BASH_REMATCH[1]}"
+        SSH_PORT="${BASH_REMATCH[2]}"
+    fi
 fi
 
 # Check OS and clipboard tool
@@ -206,6 +230,20 @@ if [[ ! -s "$TEMP_FILE" ]]; then
     error "Clipboard image is empty"
 fi
 
+# Handle local mode
+if [[ "$LOCAL_MODE" == true ]]; then
+    LOCAL_DIR="${CLIPSSH_LOCAL_DIR:-/tmp}"
+    mkdir -p "$LOCAL_DIR"
+    LOCAL_PATH="$LOCAL_DIR/clipboard-$(date +%s).png"
+
+    (umask 077 && cp "$TEMP_FILE" "$LOCAL_PATH")
+    copy_path_to_clipboard "$LOCAL_PATH"
+
+    success "Saved: $LOCAL_PATH"
+    echo "Path copied to clipboard - paste it directly"
+    exit 0
+fi
+
 # Generate remote path
 REMOTE_DIR="${CLIPSSH_REMOTE_DIR:-/tmp}"
 REMOTE_PATH="$REMOTE_DIR/clipboard-$(date +%s).png"
@@ -235,13 +273,7 @@ if ! cat "$TEMP_FILE" | ssh "${SSH_OPTS[@]}" "$HOST" "umask 077 && cat > $REMOTE
 fi
 
 # Copy path to clipboard
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo -n "$REMOTE_PATH" | pbcopy
-elif [[ -n "$WAYLAND_DISPLAY" ]] && command -v wl-copy &> /dev/null; then
-    echo -n "$REMOTE_PATH" | wl-copy
-elif command -v xclip &> /dev/null; then
-    echo -n "$REMOTE_PATH" | xclip -selection clipboard
-fi
+copy_path_to_clipboard "$REMOTE_PATH"
 
 success "Uploaded: $REMOTE_PATH"
 echo "Path copied to clipboard - paste it directly"
